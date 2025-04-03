@@ -15,7 +15,8 @@ import (
 type Pet struct {
 	config
 	// ID of the ent.
-	ID           int `json:"id,omitempty"`
+	ID           string `json:"id,omitempty"`
+	user_pets    *int
 	selectValues sql.SelectValues
 }
 
@@ -25,6 +26,8 @@ func (*Pet) scanValues(columns []string) ([]any, error) {
 	for i := range columns {
 		switch columns[i] {
 		case pet.FieldID:
+			values[i] = new(sql.NullString)
+		case pet.ForeignKeys[0]: // user_pets
 			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -42,11 +45,18 @@ func (pe *Pet) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case pet.FieldID:
-			value, ok := values[i].(*sql.NullInt64)
-			if !ok {
-				return fmt.Errorf("unexpected type %T for field id", value)
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field id", values[i])
+			} else if value.Valid {
+				pe.ID = value.String
 			}
-			pe.ID = int(value.Int64)
+		case pet.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field user_pets", value)
+			} else if value.Valid {
+				pe.user_pets = new(int)
+				*pe.user_pets = int(value.Int64)
+			}
 		default:
 			pe.selectValues.Set(columns[i], values[i])
 		}

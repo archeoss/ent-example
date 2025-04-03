@@ -22,6 +22,7 @@ type PetQuery struct {
 	order      []pet.OrderOption
 	inters     []Interceptor
 	predicates []predicate.Pet
+	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -82,8 +83,8 @@ func (pq *PetQuery) FirstX(ctx context.Context) *Pet {
 
 // FirstID returns the first Pet ID from the query.
 // Returns a *NotFoundError when no Pet ID was found.
-func (pq *PetQuery) FirstID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (pq *PetQuery) FirstID(ctx context.Context) (id string, err error) {
+	var ids []string
 	if ids, err = pq.Limit(1).IDs(setContextOp(ctx, pq.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -95,7 +96,7 @@ func (pq *PetQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (pq *PetQuery) FirstIDX(ctx context.Context) int {
+func (pq *PetQuery) FirstIDX(ctx context.Context) string {
 	id, err := pq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -133,8 +134,8 @@ func (pq *PetQuery) OnlyX(ctx context.Context) *Pet {
 // OnlyID is like Only, but returns the only Pet ID in the query.
 // Returns a *NotSingularError when more than one Pet ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (pq *PetQuery) OnlyID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (pq *PetQuery) OnlyID(ctx context.Context) (id string, err error) {
+	var ids []string
 	if ids, err = pq.Limit(2).IDs(setContextOp(ctx, pq.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -150,7 +151,7 @@ func (pq *PetQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (pq *PetQuery) OnlyIDX(ctx context.Context) int {
+func (pq *PetQuery) OnlyIDX(ctx context.Context) string {
 	id, err := pq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -178,7 +179,7 @@ func (pq *PetQuery) AllX(ctx context.Context) []*Pet {
 }
 
 // IDs executes the query and returns a list of Pet IDs.
-func (pq *PetQuery) IDs(ctx context.Context) (ids []int, err error) {
+func (pq *PetQuery) IDs(ctx context.Context) (ids []string, err error) {
 	if pq.ctx.Unique == nil && pq.path != nil {
 		pq.Unique(true)
 	}
@@ -190,7 +191,7 @@ func (pq *PetQuery) IDs(ctx context.Context) (ids []int, err error) {
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (pq *PetQuery) IDsX(ctx context.Context) []int {
+func (pq *PetQuery) IDsX(ctx context.Context) []string {
 	ids, err := pq.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -310,9 +311,13 @@ func (pq *PetQuery) prepareQuery(ctx context.Context) error {
 
 func (pq *PetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Pet, error) {
 	var (
-		nodes = []*Pet{}
-		_spec = pq.querySpec()
+		nodes   = []*Pet{}
+		withFKs = pq.withFKs
+		_spec   = pq.querySpec()
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, pet.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Pet).scanValues(nil, columns)
 	}
@@ -343,7 +348,7 @@ func (pq *PetQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (pq *PetQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(pet.Table, pet.Columns, sqlgraph.NewFieldSpec(pet.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewQuerySpec(pet.Table, pet.Columns, sqlgraph.NewFieldSpec(pet.FieldID, field.TypeString))
 	_spec.From = pq.sql
 	if unique := pq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

@@ -18,6 +18,12 @@ type PetCreate struct {
 	hooks    []Hook
 }
 
+// SetID sets the "id" field.
+func (pc *PetCreate) SetID(s string) *PetCreate {
+	pc.mutation.SetID(s)
+	return pc
+}
+
 // Mutation returns the PetMutation object of the builder.
 func (pc *PetCreate) Mutation() *PetMutation {
 	return pc.mutation
@@ -52,6 +58,11 @@ func (pc *PetCreate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (pc *PetCreate) check() error {
+	if v, ok := pc.mutation.ID(); ok {
+		if err := pet.IDValidator(v); err != nil {
+			return &ValidationError{Name: "id", err: fmt.Errorf(`ent: validator failed for field "Pet.id": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -66,8 +77,13 @@ func (pc *PetCreate) sqlSave(ctx context.Context) (*Pet, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != nil {
+		if id, ok := _spec.ID.Value.(string); ok {
+			_node.ID = id
+		} else {
+			return nil, fmt.Errorf("unexpected Pet.ID type: %T", _spec.ID.Value)
+		}
+	}
 	pc.mutation.id = &_node.ID
 	pc.mutation.done = true
 	return _node, nil
@@ -76,8 +92,12 @@ func (pc *PetCreate) sqlSave(ctx context.Context) (*Pet, error) {
 func (pc *PetCreate) createSpec() (*Pet, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Pet{config: pc.config}
-		_spec = sqlgraph.NewCreateSpec(pet.Table, sqlgraph.NewFieldSpec(pet.FieldID, field.TypeInt))
+		_spec = sqlgraph.NewCreateSpec(pet.Table, sqlgraph.NewFieldSpec(pet.FieldID, field.TypeString))
 	)
+	if id, ok := pc.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	return _node, _spec
 }
 
@@ -125,10 +145,6 @@ func (pcb *PetCreateBulk) Save(ctx context.Context) ([]*Pet, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
-					id := specs[i].ID.Value.(int64)
-					nodes[i].ID = int(id)
-				}
 				mutation.done = true
 				return nodes[i], nil
 			})
